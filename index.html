@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaiyaphum Flood Monitoring</title>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+    .header-box {
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: rgba(255, 255, 255, 0.9); padding: 12px 18px;
+      border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-box">
+    <h3 style="margin:0;">รายงานน้ำท่วม จังหวัดชัยภูมิ</h3>
+    <p style="margin:4px 0 0; font-size: 13px; color: #555;">ระบบติดตามสถานการณ์น้ำแบบเรียลไทม์</p>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    // 1. กำหนดพิกัดเริ่มต้นที่ศูนย์กลางจังหวัดชัยภูมิ
+    const chaiyaphumLat = 15.8064;
+    const chaiyaphumLng = 102.0315;
+    
+    const map = L.map('map').setView([chaiyaphumLat, chaiyaphumLng], 10);
+
+    // 2. ใช้แผนที่ฐานจาก OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // 3. ตัวอย่างหมุดรายงานเหตุการณ์ (จำลองข้อมูล)
+    const mockReports = [
+      { lat: 15.8064, lng: 102.0315, location: "อ.เมืองชัยภูมิ", status: "ท่วมขัง 20-30 ซม.", color: "orange" },
+      { lat: 15.6521, lng: 101.9841, location: "อ.จัตุรัส (ใกล้บึงละหาน)", status: "วิกฤต รถเล็กผ่านไม่ได้", color: "red" }
+    ];
+
+    // แสดงหมุดบนแผนที่
+    mockReports.forEach(item => {
+      const marker = L.circleMarker([item.lat, item.lng], {
+        color: item.color,
+        fillColor: item.color,
+        fillOpacity: 0.8,
+        radius: 10
+      }).addTo(map);
+
+      marker.bindPopup(`<b>${item.location}</b><br>สถานะ: ${item.status}`);
+    });
+  </script>
+</body>
+</html>
