@@ -11,7 +11,11 @@
 
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; }
-    #map { width: 100vw; height: 100vh; cursor: crosshair; }
+    #map { width: 100vw; height: 100vh; }
+    
+    /* สไตล์เมื่ออยู่ในโหมดจิ้มเลือกจุดบนแผนที่ */
+    #map.pin-mode { cursor: crosshair !important; }
+
     .header-box {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(255, 255, 255, 0.95); padding: 14px 18px;
@@ -21,13 +25,14 @@
     .btn-report {
       margin-top: 10px; background: #e53e3e; color: white; border: none;
       padding: 10px 14px; border-radius: 6px; cursor: pointer; width: 100%;
-      font-weight: bold; font-size: 14px;
+      font-weight: bold; font-size: 14px; transition: all 0.2s;
     }
     .btn-report.active {
-      background: #2b6cb0;
+      background: #dd6b20; /* เปลี่ยนเป็นสีส้มเพื่อแสดงว่าเปิดโหมดปักหมุดอยู่ */
     }
     .instruction-note {
-      font-size: 11px; color: #d69e2e; margin-top: 6px; font-weight: bold; display: none;
+      font-size: 12px; color: #c05621; margin-top: 8px; font-weight: bold; display: none;
+      background: #feebc8; padding: 6px; border-radius: 4px; text-align: center;
     }
   </style>
 </head>
@@ -37,7 +42,7 @@
     <h3 style="margin:0; color: #2d3748;">รายงานน้ำท่วม ชัยภูมิ</h3>
     <p style="margin:4px 0 0; font-size: 12px; color: #718096;">ระบบติดตามและแจ้งเหตุบนแผนที่</p>
     <button id="reportBtn" class="btn-report" onclick="toggleReportMode()">+ แจ้งจุดน้ำท่วม (กดเพื่อปักหมุด)</button>
-    <div id="instructionNote" class="instruction-note">👉 แตะ/คลิก บนจุดเกิดเหตุในแผนที่ได้เลย</div>
+    <div id="instructionNote" class="instruction-note">👇 แตะ/คลิก ตรงจุดเกิดเหตุบนแผนที่</div>
   </div>
 
   <div id="map"></div>
@@ -46,9 +51,10 @@
     // -------------------------------------------------------------
     // 1. นำ URL จาก Google Apps Script มาวางที่นี่
     // -------------------------------------------------------------
-    const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwpGvzpeLK_YpQl3-mg6NDa3aMgTdnJJ51mQhZXb1uBGD07T-1c1lUJ9X3rwG2vSZR8/exec";
+    const GOOGLE_SHEET_API = "วาง_WEB_APP_URL_ตรงนี้";
 
     let isReportMode = false;
+    let tempMarker = null;
 
     // ตั้งค่าแผนที่เริ่มต้นที่ จ.ชัยภูมิ
     const map = L.map('map').setView([15.8064, 102.0315], 9);
@@ -59,28 +65,27 @@
     }).addTo(map);
 
     // -------------------------------------------------------------
-    // 2. ดึงเส้นขอบเขตจังหวัดชัยภูมิ (ปรับเป็น เส้นสีดำ หนาชัดเจน)
+    // 2. ดึงเส้นขอบเขตจังหวัดชัยภูมิ (เส้นสีดำ หนาชัดเจน)
     // -------------------------------------------------------------
     fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
       .then(response => response.json())
       .then(geoData => {
         const boundaryLayer = L.geoJSON(geoData, {
           style: {
-            color: '#000000',      // สีเส้นขอบเขต (สีดำ)
-            weight: 4,             // ความหนาของเส้น
-            opacity: 0.9,          // ความชัดเจนของเส้น
-            fillColor: '#3182ce',  // สีไฮไลท์พื้นที่ด้านใน
-            fillOpacity: 0.05      // โปร่งแสงด้านใน
+            color: '#000000',      // เส้นขอบเขตสีดำ
+            weight: 3.5,           // ความหนาเส้น
+            opacity: 0.85,
+            fillColor: '#3182ce',
+            fillOpacity: 0.05
           }
         }).addTo(map);
 
-        // ปรับโฟกัสแผนที่ให้อยู่ในขอบเขตจังหวัดชัยภูมิโดยอัตโนมัติ
         map.fitBounds(boundaryLayer.getBounds());
       })
       .catch(err => console.log('ไม่สามารถโหลดเส้นขอบเขตได้:', err));
 
     // -------------------------------------------------------------
-    // 3. ฟังก์ชันดึงข้อมูลจาก Google Sheets มาแสดง
+    // 3. ฟังก์ชันดึงข้อมูลหมุดจาก Google Sheets
     // -------------------------------------------------------------
     async function loadData() {
       if (!GOOGLE_SHEET_API || GOOGLE_SHEET_API.includes("วาง_WEB_APP_URL")) return;
@@ -116,61 +121,78 @@
     }
 
     // -------------------------------------------------------------
-    // 4. ระบบกดเปิดโหมดแจ้งเหตุแล้วจิ้มบนแผนที่
+    // 4. สลับโหมดเปิด/ปิด การจิ้มปักหมุด
     // -------------------------------------------------------------
     function toggleReportMode() {
       isReportMode = !isReportMode;
       const btn = document.getElementById("reportBtn");
       const note = document.getElementById("instructionNote");
+      const mapDiv = document.getElementById("map");
 
       if (isReportMode) {
-        btn.innerText = "❌ ยกเลิกการเลือกจุด";
+        btn.innerText = "❌ ยกเลิกการปักหมุด";
         btn.classList.add("active");
         note.style.display = "block";
+        mapDiv.classList.add("pin-mode");
       } else {
         btn.innerText = "+ แจ้งจุดน้ำท่วม (กดเพื่อปักหมุด)";
         btn.classList.remove("active");
         note.style.display = "none";
+        mapDiv.classList.remove("pin-mode");
       }
     }
 
-    // เมื่อคลิก/จิ้มบนแผนที่
+    // -------------------------------------------------------------
+    // 5. จับเหตุการณ์เมื่อผู้ใช้แตะ/คลิกบนแผนที่
+    // -------------------------------------------------------------
     map.on('click', async function(e) {
-      if (!isReportMode) return; // ถ้าไม่ได้เปิดโหมดแจ้งเหตุจะไม่ทำงาน
+      // ถ้าไม่ได้เปิดโหมดปักหมุด ให้ข้ามไป ไม่ต้องทำอะไร
+      if (!isReportMode) return;
 
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
 
-      // ถามรายละเอียดเพิ่มเติม
-      const waterLevel = prompt("ระบุระดับน้ำ (เช่น: ต่ำ / ปานกลาง / สูง / รถเล็กผ่านไม่ได้):", "ปานกลาง");
-      if (!waterLevel) return;
+      // แสดงหมุดชั่วคราว ณ จุดที่แตะ
+      if (tempMarker) map.removeLayer(tempMarker);
+      tempMarker = L.marker([lat, lng]).addTo(map);
 
-      const locationName = prompt("ชื่อสถานที่/จุดสังเกตใกล้เคียง (ถ้ามี):", "จุดปักหมุดบนแผนที่");
-      const description = prompt("รายละเอียดเพิ่มเติม (ถ้ามี):", "");
+      // ถามข้อมูลรายละเอียดหลังจากแตะจุดแล้วเท่านั้น
+      setTimeout(async () => {
+        const waterLevel = prompt("ระบุระดับน้ำที่จุดนี้ (เช่น: ต่ำ / ปานกลาง / สูง / รถเล็กผ่านไม่ได้):", "ปานกลาง");
+        
+        if (!waterLevel) {
+          map.removeLayer(tempMarker); // ถ้ายกเลิก ให้ลบหมุดชั่วคราวออก
+          return;
+        }
 
-      const payload = {
-        location_name: locationName,
-        latitude: lat,
-        longitude: lng,
-        water_level: waterLevel,
-        description: description
-      };
+        const locationName = prompt("ชื่อสถานที่/จุดสังเกตใกล้เคียง (ถ้ามี):", "จุดปักหมุดบนแผนที่");
+        const description = prompt("รายละเอียดเพิ่มเติม (ถ้ามี):", "");
 
-      try {
-        // ส่งข้อมูลเข้า Google Sheets
-        await fetch(GOOGLE_SHEET_API, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        const payload = {
+          location_name: locationName,
+          latitude: lat,
+          longitude: lng,
+          water_level: waterLevel,
+          description: description
+        };
 
-        alert("ปักหมุดและบันทึกข้อมูลเรียบร้อยแล้ว!");
-        toggleReportMode(); // ปิดโหมดปักหมุด
-        setTimeout(loadData, 1500); // โหลดหมุดใหม่ขึ้นแผนที่
-      } catch (err) {
-        alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
-      }
+        try {
+          await fetch(GOOGLE_SHEET_API, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          alert("บันทึกจุดแจ้งเหตุเรียบร้อยแล้ว!");
+          if (tempMarker) map.removeLayer(tempMarker);
+          toggleReportMode(); // ปิดโหมดปักหมุด
+          setTimeout(loadData, 1500); // โหลดหมุดใหม่จาก Sheet
+        } catch (err) {
+          alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
+          if (tempMarker) map.removeLayer(tempMarker);
+        }
+      }, 100);
     });
 
     // โหลดข้อมูลเมื่อเปิดหน้าเว็บ
