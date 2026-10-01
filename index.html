@@ -208,9 +208,14 @@
           }
         }).addTo(map);
 
-        // วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดงเรืองแสง
+        // 3.1 วาดเส้นขอบฐานด้านหลัง (สีดำเงา) เพิ่มมิติให้เหมือนขอบเขตประเทศ
+        L.geoJSON(geoData, {
+          style: { color: '#000000', weight: 24, opacity: 0.8, fillOpacity: 0 }
+        }).addTo(map);
+
+        // 3.2 วาดเส้นขอบเขตจังหวัดชัยภูมิหลัก (สีแดงหนาเด่นชัด)
         const boundaryLayer = L.geoJSON(geoData, {
-          style: { color: '#e53e3e', weight: 30, opacity: 0.9, fillOpacity: 0 }
+          style: { color: '#e53e3e', weight: 18, opacity: 1.0, fillOpacity: 0 }
         }).addTo(map);
 
         map.fitBounds(boundaryLayer.getBounds());
