@@ -8,13 +8,11 @@
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Leaflet BoundaryCanvas Plugin สำหรับตัดแสดงเฉพาะพื้นที่ชัยภูมิ -->
-  <script src="https://cdn.jsdelivr.net/npm/leaflet-boundary-canvas@1.0.0/leaflet-boundary-canvas.min.js"></script>
 
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #2d3748; }
-    #map { width: 100vw; height: calc(100vh - 110px); background: #2d3748; }
+    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a202c; }
+    #map { width: 100vw; height: calc(100vh - 110px); background: #1a202c; }
     #map.pin-mode { cursor: crosshair !important; }
 
     /* แถบอธิบายความหมายของแต่ละสีด้านบน */
@@ -160,38 +158,64 @@
   </div>
 
   <script>
-    const GOOGLE_SHEET_API = "วาง_WEB_APP_URL_ตรงนี้";
+    const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycby-xqamELj9ZjWXDbI-WUtIlLC1QSNbyi9q6dTEUONXv46J60KaT3j4Syfb1xYEYgKj/exec";
 
     let isReportMode = false;
     let tempMarker = null;
     let currentLatLng = null;
     let markersLayerGroup = L.layerGroup();
 
+    // สร้าง Map Object
     const map = L.map('map').setView([15.8064, 102.0315], 9);
+
+    // 1. โหลด OpenStreetMap สว่างปกติ
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
     markersLayerGroup.addTo(map);
 
-    // ดึง GeoJSON ชัยภูมิ และแสดงแผนที่เฉพาะภายในขอบเขตชัยภูมิ
-    fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
-      .then(response => response.json())
-      .then(geoData => {
-        
-        // 1. ตัดแสดงแผนที่สว่างเฉพาะในจังหวัดชัยภูมิ (BoundaryCanvas)
-        const osmUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-        const chaiyaphumTileLayer = L.TileLayer.boundaryCanvas(osmUrl, {
-          boundary: geoData,
-          maxZoom: 18,
-          attribution: '© OpenStreetMap'
-        });
-        chaiyaphumTileLayer.addTo(map);
+    // พิกัดกรอบจังหวัดชัยภูมิ (Inline GeoJSON - ป้องกันปัญหาไฟล์ภายนอกโหลดไม่ขึ้น)
+    const chaiyaphumGeoJSON = {
+      "type": "FeatureCollection",
+      "features": [{
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [101.40, 16.50], [102.30, 16.50], [102.45, 16.20],
+            [102.40, 15.40], [102.00, 15.20], [101.30, 15.30],
+            [101.10, 15.80], [101.40, 16.50]
+          ]]
+        }
+      }]
+    };
 
-        // 2. วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดงเน้นย้ำ
-        const boundaryLayer = L.geoJSON(geoData, {
-          style: { color: '#e53e3e', weight: 3, opacity: 0.9, fillOpacity: 0 }
-        }).addTo(map);
+    // 2. วาดฉากสีเทาดำบังเฉพาะพื้นที่รอบนอกจังหวัด
+    const maskCoords = [
+      [[90, -180], [90, 180], [-90, 180], [-90, -180]],
+      [
+        [16.50, 101.40], [16.50, 102.30], [16.20, 102.45],
+        [15.40, 102.40], [15.20, 102.00], [15.30, 101.30],
+        [15.80, 101.10], [16.50, 101.40]
+      ]
+    ];
 
-        map.fitBounds(boundaryLayer.getBounds());
-      })
-      .catch(err => console.error("โหลด GeoJSON ไม่สำเร็จ:", err));
+    L.polygon(maskCoords, {
+      color: '#1a202c',
+      weight: 1,
+      fillColor: '#1a202c',
+      fillOpacity: 0.75,
+      interactive: false
+    }).addTo(map);
+
+    // 3. วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดง
+    const boundaryLayer = L.geoJSON(chaiyaphumGeoJSON, {
+      style: { color: '#e53e3e', weight: 3, opacity: 0.9, fillOpacity: 0 }
+    }).addTo(map);
+
+    map.fitBounds(boundaryLayer.getBounds());
 
     // โหลดข้อมูลหมุดจาก Google Sheets
     async function loadData() {
