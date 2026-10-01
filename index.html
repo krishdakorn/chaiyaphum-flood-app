@@ -12,8 +12,6 @@
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; }
     #map { width: 100vw; height: 100vh; }
-    
-    /* สไตล์เมื่ออยู่ในโหมดจิ้มเลือกจุดบนแผนที่ */
     #map.pin-mode { cursor: crosshair !important; }
 
     .header-box {
@@ -27,13 +25,32 @@
       padding: 10px 14px; border-radius: 6px; cursor: pointer; width: 100%;
       font-weight: bold; font-size: 14px; transition: all 0.2s;
     }
-    .btn-report.active {
-      background: #dd6b20; /* เปลี่ยนเป็นสีส้มเพื่อแสดงว่าเปิดโหมดปักหมุดอยู่ */
-    }
+    .btn-report.active { background: #dd6b20; }
     .instruction-note {
       font-size: 12px; color: #c05621; margin-top: 8px; font-weight: bold; display: none;
       background: #feebc8; padding: 6px; border-radius: 4px; text-align: center;
     }
+
+    /* Modal Form สำหรับกรอกข้อมูล */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.5); z-index: 2000; display: none;
+      justify-content: center; align-items: center;
+    }
+    .modal-content {
+      background: white; padding: 20px; border-radius: 10px;
+      width: 90%; max-width: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .modal-content h4 { margin-top: 0; margin-bottom: 12px; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+    .form-group select, .form-group input, .form-group textarea {
+      width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;
+    }
+    .modal-buttons { display: flex; gap: 8px; margin-top: 16px; }
+    .btn-submit { background: #38a169; color: white; border: none; padding: 10px; border-radius: 4px; flex: 1; cursor: pointer; font-weight: bold; }
+    .btn-cancel { background: #718096; color: white; border: none; padding: 10px; border-radius: 4px; flex: 1; cursor: pointer; }
+    .btn-delete-pin { background: #e53e3e; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-top: 6px; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -47,72 +64,97 @@
 
   <div id="map"></div>
 
+  <!-- Modal ฟอร์มระบุข้อมูลระดับน้ำ -->
+  <div id="reportModal" class="modal-overlay">
+    <div class="modal-content">
+      <h4>📍 แจ้งรายละเอียดจุดน้ำท่วม</h4>
+      
+      <div class="form-group">
+        <label>ระดับน้ำ (เลือกจากรายการ):</label>
+        <select id="waterLevelSelect">
+          <option value="ต่ำ">🟡 น้ำขังเล็กน้อย / ต่ำ (10-20 ซม.)</option>
+          <option value="ปานกลาง" selected>🟠 ปานกลาง / เฝ้าระวัง (20-50 ซม.)</option>
+          <option value="สูง">🔴 สูง / รถเล็กผ่านไม่ได้ (50-100 ซม.)</option>
+          <option value="วิกฤต">วิกฤต / สัญจรไม่ได้ (> 100 ซม.)</option>
+          <option value="ปกติ/น้ำลดแล้ว">🟢 ปกติ / น้ำลดลงแล้ว</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>ชื่อสถานที่ / จุดสังเกต:</label>
+        <input type="text" id="locationNameInput" placeholder="เช่น หน้าวัดบ้านค่าย, อ.เมือง">
+      </div>
+
+      <div class="form-group">
+        <label>รายละเอียดเพิ่มเติม:</label>
+        <textarea id="descriptionInput" rows="2" placeholder="เช่น ท่วมถนนทางเข้าหมู่บ้าน"></textarea>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn-submit" onclick="submitReport()">บันทึกข้อมูล</button>
+        <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // -------------------------------------------------------------
-    // 1. นำ URL จาก Google Apps Script มาวางที่นี่
-    // -------------------------------------------------------------
     const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwpGvzpeLK_YpQl3-mg6NDa3aMgTdnJJ51mQhZXb1uBGD07T-1c1lUJ9X3rwG2vSZR8/exec";
 
     let isReportMode = false;
     let tempMarker = null;
+    let currentLatLng = null;
+    let markersLayerGroup = L.layerGroup();
 
-    // ตั้งค่าแผนที่เริ่มต้นที่ จ.ชัยภูมิ
     const map = L.map('map').setView([15.8064, 102.0315], 9);
+    markersLayerGroup.addTo(map);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // -------------------------------------------------------------
-    // 2. ดึงเส้นขอบเขตจังหวัดชัยภูมิ (เส้นสีดำ หนาชัดเจน)
-    // -------------------------------------------------------------
+    // ดึงเส้นขอบเขตจังหวัดชัยภูมิ
     fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
       .then(response => response.json())
       .then(geoData => {
         const boundaryLayer = L.geoJSON(geoData, {
-          style: {
-            color: '#000000',      // เส้นขอบเขตสีดำ
-            weight: 3.5,           // ความหนาเส้น
-            opacity: 0.85,
-            fillColor: '#3182ce',
-            fillOpacity: 0.05
-          }
+          style: { color: '#000000', weight: 3.5, opacity: 0.85, fillColor: '#3182ce', fillOpacity: 0.05 }
         }).addTo(map);
-
         map.fitBounds(boundaryLayer.getBounds());
-      })
-      .catch(err => console.log('ไม่สามารถโหลดเส้นขอบเขตได้:', err));
+      }).catch(err => console.log(err));
 
-    // -------------------------------------------------------------
-    // 3. ฟังก์ชันดึงข้อมูลหมุดจาก Google Sheets
-    // -------------------------------------------------------------
+    // โหลดข้อมูลหมุดจาก Google Sheets
     async function loadData() {
       if (!GOOGLE_SHEET_API || GOOGLE_SHEET_API.includes("วาง_WEB_APP_URL")) return;
 
       try {
         const response = await fetch(GOOGLE_SHEET_API);
         const data = await response.json();
+        
+        markersLayerGroup.clearLayers(); // ล้างหมุดเก่าก่อนวาดใหม่
 
-        data.forEach(item => {
+        data.forEach((item, index) => {
           if (item.latitude && item.longitude) {
             let color = "orange";
             if (item.water_level === "สูง" || item.water_level === "วิกฤต") color = "red";
             if (item.water_level === "ต่ำ") color = "gold";
+            if (item.water_level === "ปกติ/น้ำลดแล้ว") color = "green";
 
             const marker = L.circleMarker([parseFloat(item.latitude), parseFloat(item.longitude)], {
               color: color, fillColor: color, fillOpacity: 0.8, radius: 9
-            }).addTo(map);
+            });
 
             marker.bindPopup(`
               <div style="font-size:13px;">
-                <b>สถานที่:</b> ${item.location_name || 'จุดแจ้งเหตุบนแผนที่'}<br>
+                <b>สถานที่:</b> ${item.location_name || 'จุดแจ้งเหตุ'}<br>
                 <b>ระดับน้ำ:</b> ${item.water_level || '-'}<br>
                 <b>รายละเอียด:</b> ${item.description || '-'}<br>
-                <small style="color:#666;">พิกัด: ${parseFloat(item.latitude).toFixed(4)}, ${parseFloat(item.longitude).toFixed(4)}</small><br>
-                <small style="color:#666;">เวลา: ${item.timestamp ? new Date(item.timestamp).toLocaleString('th-TH') : '-'}</small>
+                <small style="color:#666;">เวลา: ${item.timestamp ? new Date(item.timestamp).toLocaleString('th-TH') : '-'}</small><br>
+                <button class="btn-delete-pin" onclick="deletePin(${index + 2})">🗑️ ลบจุดนี้ (แถวที่ ${index + 2})</button>
               </div>
             `);
+
+            markersLayerGroup.addLayer(marker);
           }
         });
       } catch (err) {
@@ -120,9 +162,6 @@
       }
     }
 
-    // -------------------------------------------------------------
-    // 4. สลับโหมดเปิด/ปิด การจิ้มปักหมุด
-    // -------------------------------------------------------------
     function toggleReportMode() {
       isReportMode = !isReportMode;
       const btn = document.getElementById("reportBtn");
@@ -142,60 +181,59 @@
       }
     }
 
-    // -------------------------------------------------------------
-    // 5. จับเหตุการณ์เมื่อผู้ใช้แตะ/คลิกบนแผนที่
-    // -------------------------------------------------------------
-    map.on('click', async function(e) {
-      // ถ้าไม่ได้เปิดโหมดปักหมุด ให้ข้ามไป ไม่ต้องทำอะไร
+    // เมื่อจิ้มแผนที่
+    map.on('click', function(e) {
       if (!isReportMode) return;
 
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
-
-      // แสดงหมุดชั่วคราว ณ จุดที่แตะ
+      currentLatLng = e.latlng;
       if (tempMarker) map.removeLayer(tempMarker);
-      tempMarker = L.marker([lat, lng]).addTo(map);
+      tempMarker = L.marker([currentLatLng.lat, currentLatLng.lng]).addTo(map);
 
-      // ถามข้อมูลรายละเอียดหลังจากแตะจุดแล้วเท่านั้น
-      setTimeout(async () => {
-        const waterLevel = prompt("ระบุระดับน้ำที่จุดนี้ (เช่น: ต่ำ / ปานกลาง / สูง / รถเล็กผ่านไม่ได้):", "ปานกลาง");
-        
-        if (!waterLevel) {
-          map.removeLayer(tempMarker); // ถ้ายกเลิก ให้ลบหมุดชั่วคราวออก
-          return;
-        }
-
-        const locationName = prompt("ชื่อสถานที่/จุดสังเกตใกล้เคียง (ถ้ามี):", "จุดปักหมุดบนแผนที่");
-        const description = prompt("รายละเอียดเพิ่มเติม (ถ้ามี):", "");
-
-        const payload = {
-          location_name: locationName,
-          latitude: lat,
-          longitude: lng,
-          water_level: waterLevel,
-          description: description
-        };
-
-        try {
-          await fetch(GOOGLE_SHEET_API, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-
-          alert("บันทึกจุดแจ้งเหตุเรียบร้อยแล้ว!");
-          if (tempMarker) map.removeLayer(tempMarker);
-          toggleReportMode(); // ปิดโหมดปักหมุด
-          setTimeout(loadData, 1500); // โหลดหมุดใหม่จาก Sheet
-        } catch (err) {
-          alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
-          if (tempMarker) map.removeLayer(tempMarker);
-        }
-      }, 100);
+      // เปิด Modal เลือกตัวเลือก
+      document.getElementById("reportModal").style.display = "flex";
     });
 
-    // โหลดข้อมูลเมื่อเปิดหน้าเว็บ
+    function closeModal() {
+      document.getElementById("reportModal").style.display = "none";
+      if (tempMarker) map.removeLayer(tempMarker);
+    }
+
+    // ส่งข้อมูลแบบบันทึกตัวเลือก
+    async function submitReport() {
+      const waterLevel = document.getElementById("waterLevelSelect").value;
+      const locationName = document.getElementById("locationNameInput").value || "จุดปักหมุดบนแผนที่";
+      const description = document.getElementById("descriptionInput").value || "";
+
+      const payload = {
+        location_name: locationName,
+        latitude: currentLatLng.lat,
+        longitude: currentLatLng.lng,
+        water_level: waterLevel,
+        description: description
+      };
+
+      try {
+        await fetch(GOOGLE_SHEET_API, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        alert("บันทึกข้อมูลเรียบร้อยแล้ว!");
+        closeModal();
+        toggleReportMode();
+        setTimeout(loadData, 1500);
+      } catch (err) {
+        alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
+      }
+    }
+
+    // ฟังก์ชันช่วยแสดงหมายเลขแถวใน Sheet เผื่อเข้าไปลบใน Google Sheet
+    function deletePin(rowIndex) {
+      alert(`หากต้องการลบจุดนี้ ให้เปิด Google Sheet แล้วลบข้อมูลแถวที่ ${rowIndex} ออกได้เลยครับ`);
+    }
+
     loadData();
   </script>
 </body>
