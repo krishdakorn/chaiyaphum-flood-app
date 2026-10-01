@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chaiyaphum Flood Monitoring</title>
+  <title>รายงานน้ำท่วม จังหวัดชัยภูมิ</title>
   
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -14,50 +14,138 @@
     #map { width: 100vw; height: 100vh; }
     .header-box {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
-      background: rgba(255, 255, 255, 0.9); padding: 12px 18px;
+      background: rgba(255, 255, 255, 0.95); padding: 14px 18px;
       border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      max-width: 280px;
     }
+    .btn-report {
+      margin-top: 10px; background: #e53e3e; color: white; border: none;
+      padding: 10px 14px; border-radius: 6px; cursor: pointer; width: 100%;
+      font-weight: bold; font-size: 14px;
+    }
+    .btn-report:hover { background: #c53030; }
   </style>
 </head>
 <body>
 
   <div class="header-box">
-    <h3 style="margin:0;">รายงานน้ำท่วม จังหวัดชัยภูมิ</h3>
-    <p style="margin:4px 0 0; font-size: 13px; color: #555;">ระบบติดตามสถานการณ์น้ำแบบเรียลไทม์</p>
+    <h3 style="margin:0; color: #2d3748;">รายงานน้ำท่วม ชัยภูมิ</h3>
+    <p style="margin:4px 0 0; font-size: 12px; color: #718096;">ระบบติดตามสถานการณ์และแจ้งเหตุ</p>
+    <button class="btn-report" onclick="reportFlood()">+ แจ้งจุดน้ำท่วม</button>
   </div>
 
   <div id="map"></div>
 
   <script>
-    // 1. กำหนดพิกัดเริ่มต้นที่ศูนย์กลางจังหวัดชัยภูมิ
-    const chaiyaphumLat = 15.8064;
-    const chaiyaphumLng = 102.0315;
-    
-    const map = L.map('map').setView([chaiyaphumLat, chaiyaphumLng], 10);
+    // -------------------------------------------------------------
+    // 1. นำ URL จาก Google Apps Script (Deploy Web App) มาวางที่นี่
+    // -------------------------------------------------------------
+    const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwpGvzpeLK_YpQl3-mg6NDa3aMgTdnJJ51mQhZXb1uBGD07T-1c1lUJ9X3rwG2vSZR8/exec";
 
-    // 2. ใช้แผนที่ฐานจาก OpenStreetMap
+    // ตั้งค่าแผนที่เริ่มต้นที่ จ.ชัยภูมิ
+    const map = L.map('map').setView([15.8064, 102.0315], 9);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 3. ตัวอย่างหมุดรายงานเหตุการณ์ (จำลองข้อมูล)
-    const mockReports = [
-      { lat: 15.8064, lng: 102.0315, location: "อ.เมืองชัยภูมิ", status: "ท่วมขัง 20-30 ซม.", color: "orange" },
-      { lat: 15.6521, lng: 101.9841, location: "อ.จัตุรัส (ใกล้บึงละหาน)", status: "วิกฤต รถเล็กผ่านไม่ได้", color: "red" }
-    ];
+    // -------------------------------------------------------------
+    // 2. ดึงเส้นขอบเขตจังหวัดชัยภูมิ (GeoJSON) มาแสดงผล
+    // -------------------------------------------------------------
+    fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
+      .then(response => response.json())
+      .then(geoData => {
+        L.geoJSON(geoData, {
+          style: {
+            color: '#3182ce',      // สีเส้นขอบเขต (สีฟ้า)
+            weight: 2.5,           // ความหนาเส้น
+            opacity: 0.8,
+            fillColor: '#63b3ed',  // สีพื้นหลังพื้นที่
+            fillOpacity: 0.1       // ความโปร่งแสง
+          }
+        }).addTo(map);
+      })
+      .catch(err => console.log('ไม่สามารถโหลดเส้นขอบเขตได้:', err));
 
-    // แสดงหมุดบนแผนที่
-    mockReports.forEach(item => {
-      const marker = L.circleMarker([item.lat, item.lng], {
-        color: item.color,
-        fillColor: item.color,
-        fillOpacity: 0.8,
-        radius: 10
-      }).addTo(map);
+    // -------------------------------------------------------------
+    // 3. ฟังก์ชันดึงข้อมูลจุดน้ำท่วมจาก Google Sheets
+    // -------------------------------------------------------------
+    async function loadData() {
+      if (!GOOGLE_SHEET_API || GOOGLE_SHEET_API.includes("วาง_WEB_APP_URL")) return;
 
-      marker.bindPopup(`<b>${item.location}</b><br>สถานะ: ${item.status}`);
-    });
+      try {
+        const response = await fetch(GOOGLE_SHEET_API);
+        const data = await response.json();
+
+        data.forEach(item => {
+          if (item.latitude && item.longitude) {
+            let color = "orange";
+            if (item.water_level === "สูง" || item.water_level === "วิกฤต") color = "red";
+            if (item.water_level === "ต่ำ") color = "gold";
+
+            const marker = L.circleMarker([parseFloat(item.latitude), parseFloat(item.longitude)], {
+              color: color, fillColor: color, fillOpacity: 0.8, radius: 9
+            }).addTo(map);
+
+            marker.bindPopup(`
+              <div style="font-size:13px;">
+                <b>${item.location_name || 'จุดแจ้งเหตุ'}</b><br>
+                <b>ระดับน้ำ:</b> ${item.water_level || '-'}<br>
+                <b>รายละเอียด:</b> ${item.description || '-'}<br>
+                <small style="color:#666;">เวลา: ${item.timestamp ? new Date(item.timestamp).toLocaleString('th-TH') : '-'}</small>
+              </div>
+            `);
+          }
+        });
+      } catch (err) {
+        console.error("เกิดข้อผิดพลาดในการโหลดข้อมูล:", err);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 4. ฟังก์ชันส่งข้อมูลเมื่อประชาชนกดแจ้งเหตุ
+    // -------------------------------------------------------------
+    async function reportFlood() {
+      if (!GOOGLE_SHEET_API || GOOGLE_SHEET_API.includes("วาง_WEB_APP_URL")) {
+        alert("กรุณาใส่ GOOGLE_SHEET_API ในโค้ดก่อนใช้งานครับ");
+        return;
+      }
+
+      const locationName = prompt("ระบุชื่อสถานที่ / อำเภอ / หมู่บ้าน:");
+      if (!locationName) return;
+
+      const waterLevel = prompt("ระดับน้ำ (เช่น: ต่ำ / ปานกลาง / สูง / รถเล็กผ่านไม่ได้):", "ปานกลาง");
+      const description = prompt("รายละเอียดเพิ่มเติม (ถ้ามี):", "");
+
+      // ดึงพิกัดจากจุดกึ่งกลางแผนที่ ณ ตอนนั้น
+      const center = map.getCenter();
+
+      const payload = {
+        location_name: locationName,
+        latitude: center.lat,
+        longitude: center.lng,
+        water_level: waterLevel,
+        description: description
+      };
+
+      try {
+        await fetch(GOOGLE_SHEET_API, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        alert("ส่งข้อมูลแจ้งเหตุเรียบร้อยแล้วครับ!");
+        setTimeout(loadData, 1500); // โหลดข้อมูลใหม่ขึ้นแผนที่
+      } catch (err) {
+        alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
+      }
+    }
+
+    // เรียกโหลดข้อมูลเมื่อเปิดหน้าเว็บ
+    loadData();
   </script>
 </body>
 </html>
