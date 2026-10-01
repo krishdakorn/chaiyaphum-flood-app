@@ -11,8 +11,8 @@
 
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a202c; }
-    #map { width: 100vw; height: calc(100vh - 110px); background: #1a202c; }
+    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #map { width: 100vw; height: calc(100vh - 110px); }
     #map.pin-mode { cursor: crosshair !important; }
 
     /* แถบอธิบายความหมายของแต่ละสีด้านบน */
@@ -96,7 +96,7 @@
 </head>
 <body>
 
-  <!-- แถบแสดงความหมายของสีระดับน้ำด้านบน -->
+  <!-- 1. แถบแสดงความหมายของสีระดับน้ำด้านบน -->
   <div class="legend-bar">
     <div class="legend-item bg-green">🟢 ปกติ / น้ำลด</div>
     <div class="legend-item bg-yellow">🟡 น้ำขังเล็กน้อย</div>
@@ -105,7 +105,7 @@
     <div class="legend-item bg-purple">🟣 วิกฤต / สัญจรไม่ได้</div>
   </div>
 
-  <!-- แถบแสดงเวลาที่อัปเดตข้อมูลล่าสุด -->
+  <!-- 2. แถบแสดงเวลาที่อัปเดตข้อมูลล่าสุด -->
   <div class="status-bar">
     <div class="status-info">
       <span class="status-dot"></span>
@@ -165,49 +165,56 @@
     let currentLatLng = null;
     let markersLayerGroup = L.layerGroup();
 
-    // พิกัดละเอียดจริงของจังหวัดชัยภูมิ (Lat, Lng)
-    const chaiyaphumBoundary = [
-      [16.5367, 101.8906], [16.5250, 102.0125], [16.5898, 102.1245], [16.5187, 102.2612],
-      [16.4102, 102.3256], [16.2954, 102.4385], [16.1843, 102.4589], [16.0825, 102.4012],
-      [15.9612, 102.3489], [15.8523, 102.3812], [15.7212, 102.3512], [15.6189, 102.2156],
-      [15.5312, 102.1489], [15.4215, 102.1156], [15.3489, 102.0456], [15.2895, 101.9123],
-      [15.2612, 101.7856], [15.3125, 101.6234], [15.3989, 101.5123], [15.4856, 101.4215],
-      [15.5895, 101.3589], [15.6812, 101.2456], [15.7895, 101.1289], [15.9125, 101.2156],
-      [16.0245, 101.3125], [16.1489, 101.3856], [16.2812, 101.4125], [16.3989, 101.5215],
-      [16.4856, 101.6812], [16.5215, 101.7856], [16.5367, 101.8906]
-    ];
-
     const map = L.map('map').setView([15.8064, 102.0315], 9);
+    markersLayerGroup.addTo(map);
 
-    // 1. แผนที่สว่าง OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    markersLayerGroup.addTo(map);
+    // 3. ดึงเส้นขอบเขตจังหวัดชัยภูมิ และทำ Mask ให้พื้นที่ภายนอกเป็นสีเทา
+    fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
+      .then(response => response.json())
+      .then(geoData => {
+        // สร้างกรอบสี่เหลี่ยมคลุมทั่วโลกเพื่อนำมาสลัก hole เฉพาะชัยภูมิ
+        const outerWorld = [
+          [[-90, -180], [90, -180], [90, 180], [-90, 180], [-90, -180]]
+        ];
 
-    // 2. เจาะรูเฉพาะขอบเขตชัยภูมิ ให้ข้างนอกสลัว ข้างในสว่าง
-    const maskOuter = [[90, -180], [90, 180], [-90, 180], [-90, -180]];
-    const holePath = chaiyaphumBoundary.map(p => [p[0], p[1]]);
+        // สกัดค координаты ชัยภูมิ
+        let chaiyaphumCoords = [];
+        if (geoData.features[0].geometry.type === "Polygon") {
+          chaiyaphumCoords = geoData.features[0].geometry.coordinates;
+        } else if (geoData.features[0].geometry.type === "MultiPolygon") {
+          chaiyaphumCoords = geoData.features[0].geometry.coordinates[0];
+        }
 
-    L.polygon([maskOuter, holePath], {
-      color: '#1a202c',
-      weight: 1,
-      fillColor: '#1a202c',
-      fillOpacity: 0.78,
-      interactive: false
-    }).addTo(map);
+        const maskGeoJSON = {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": outerWorld.concat(chaiyaphumCoords)
+          }
+        };
 
-    // 3. วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดงเน้นย้ำตามรอยหยัก
-    const boundaryPoly = L.polygon(chaiyaphumBoundary, {
-      color: '#e53e3e',
-      weight: 3,
-      opacity: 0.9,
-      fillOpacity: 0
-    }).addTo(map);
+        // วาด Mask สีเทาดำคลุมจังหวัดอื่นๆ
+        L.geoJSON(maskGeoJSON, {
+          style: {
+            fillColor: '#1a202c',
+            fillOpacity: 0.65,
+            color: 'transparent',
+            weight: 0
+          }
+        }).addTo(map);
 
-    map.fitBounds(boundaryPoly.getBounds());
+        // วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดงเรืองแสง
+        const boundaryLayer = L.geoJSON(geoData, {
+          style: { color: '#e53e3e', weight: 12, opacity: 0.9, fillOpacity: 0 }
+        }).addTo(map);
+
+        map.fitBounds(boundaryLayer.getBounds());
+      }).catch(err => console.log(err));
 
     // โหลดข้อมูลหมุดจาก Google Sheets
     async function loadData() {
@@ -221,14 +228,14 @@
 
         data.forEach((item) => {
           if (item.latitude && item.longitude) {
-            let color = "#dd6b20"; // ส้ม
+            let color = "#dd6b20"; // ส้ม (ปานกลาง)
             if (item.water_level === "วิกฤต") color = "#805ad5"; // ม่วง
             if (item.water_level === "สูง") color = "#e53e3e"; // แดง
             if (item.water_level === "ต่ำ") color = "#ecc94b"; // เหลือง
             if (item.water_level === "ปกติ/น้ำลดแล้ว") color = "#38a169"; // เขียว
 
             const marker = L.circleMarker([parseFloat(item.latitude), parseFloat(item.longitude)], {
-              color: color, fillColor: color, fillOpacity: 0.9, radius: 9
+              color: color, fillColor: color, fillOpacity: 0.85, radius: 9
             });
 
             marker.bindPopup(`
@@ -245,7 +252,7 @@
           }
         });
 
-        // อัปเดตเวลาล่าสุด
+        // อัปเดตเวลาที่ปรับปรุงล่าสุด
         const now = new Date();
         document.getElementById("lastUpdatedText").innerText = `ปรับปรุงล่าสุดเมื่อ: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')} น.`;
 
