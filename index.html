@@ -12,7 +12,7 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    #map { width: 100vw; height: calc(100vh - 110px); }
+    #map { width: 100vw; height: calc(100vh - 110px); background: #1a202c; } /* ฉากหลังภายนอกเป็นสีเทาดำ */
     #map.pin-mode { cursor: crosshair !important; }
 
     /* แถบอธิบายความหมายของแต่ละสีด้านบน */
@@ -96,7 +96,7 @@
 </head>
 <body>
 
-  <!-- 1. แถบแสดงความหมายของสีระดับน้ำด้านบน -->
+  <!-- แถบแสดงความหมายของสีระดับน้ำด้านบน -->
   <div class="legend-bar">
     <div class="legend-item bg-green">🟢 ปกติ / น้ำลด</div>
     <div class="legend-item bg-yellow">🟡 น้ำขังเล็กน้อย</div>
@@ -105,7 +105,7 @@
     <div class="legend-item bg-purple">🟣 วิกฤต / สัญจรไม่ได้</div>
   </div>
 
-  <!-- 2. แถบแสดงเวลาที่อัปเดตข้อมูลล่าสุด -->
+  <!-- แถบแสดงเวลาที่อัปเดตข้อมูลล่าสุด -->
   <div class="status-bar">
     <div class="status-info">
       <span class="status-dot"></span>
@@ -166,51 +166,59 @@
     let markersLayerGroup = L.layerGroup();
 
     const map = L.map('map').setView([15.8064, 102.0315], 9);
-    markersLayerGroup.addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 1. แผนที่ชั้นแรก (สว่าง)
+    const baseTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 3. สร้าง Mask สีเทาปิดทับจังหวัดอื่นๆ ทั้งหมดด้วย Polygon ล้อมโลกแบบกลับทิศทาง
-    const outerBounds = [
-      [90, -180],
-      [90, 180],
-      [-90, 180],
-      [-90, -180]
-    ];
+    // 2. แผนที่ชั้นสอง (สีเทาเข้ม ปิดทับฉากหลังทั้งหมด)
+    const darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 18,
+      opacity: 0.85
+    }).addTo(map);
 
+    markersLayerGroup.addTo(map);
+
+    // ดึง GeoJSON ชัยภูมิ และวาดครอบด้วย Mask Overlay สากล
     fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
       .then(response => response.json())
       .then(geoData => {
-        // ดึงพิกัดทั้งหมดของชัยภูมิ
-        let chaiyaphumRings = [];
         
-        const geometry = geoData.features[0].geometry;
-        if (geometry.type === "Polygon") {
-          chaiyaphumRings = geometry.coordinates.map(ring => 
-            ring.map(coord => [coord[1], coord[0]])
-          );
-        } else if (geometry.type === "MultiPolygon") {
-          geometry.coordinates.forEach(poly => {
-            poly.forEach(ring => {
-              chaiyaphumRings.push(ring.map(coord => [coord[1], coord[0]]));
-            });
-          });
-        }
+        // วาดฉากสีเทาทับจังหวัดอื่นทั้งหมด (Mask)
+        const maskCoords = [
+          [ [90, -180], [90, 180], [-90, 180], [-90, -180] ]
+        ];
 
-        // วาด Polygon สีเทาคลุมทั่วโลก แล้วเจาะรูเฉพาะจังหวัดชัยภูมิ
-        const maskPolygon = L.polygon([outerBounds, ...chaiyaphumRings], {
-          color: 'none',
-          fillColor: '#1a202c', // สีเทาดำ
-          fillOpacity: 0.6,
+        // อ่านพิกัดทุกชิ้นของจังหวัดชัยภูมิเข้าเป็นรูเจาะ
+        L.geoJSON(geoData, {
+          onEachFeature: function(feature) {
+            const geom = feature.geometry;
+            if (geom.type === "Polygon") {
+              const ring = geom.coordinates[0].map(c => [c[1], c[0]]);
+              maskCoords.push(ring);
+            } else if (geom.type === "MultiPolygon") {
+              geom.coordinates.forEach(poly => {
+                const ring = poly[0].map(c => [c[1], c[0]]);
+                maskCoords.push(ring);
+              });
+            }
+          }
+        });
+
+        // วาดระบายสีเทาดำสลัวเฉพาะภายนอกชัยภูมิ
+        L.polygon(maskCoords, {
+          color: '#1a202c',
+          weight: 2,
+          fillColor: '#1a202c',
+          fillOpacity: 0.75,
           interactive: false
         }).addTo(map);
 
-        // วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดงเรืองแสงเน้นย้ำ
+        // วาดเส้นขอบเขตจังหวัดชัยภูมิสีแดงเรืองแสง
         const boundaryLayer = L.geoJSON(geoData, {
-          style: { color: '#e53e3e', weight: 3, opacity: 0.9, fillOpacity: 0 }
+          style: { color: '#e53e3e', weight: 3, opacity: 1, fillOpacity: 0 }
         }).addTo(map);
 
         map.fitBounds(boundaryLayer.getBounds());
@@ -228,14 +236,14 @@
 
         data.forEach((item) => {
           if (item.latitude && item.longitude) {
-            let color = "#dd6b20"; // ส้ม (ปานกลาง)
+            let color = "#dd6b20"; // ส้ม
             if (item.water_level === "วิกฤต") color = "#805ad5"; // ม่วง
             if (item.water_level === "สูง") color = "#e53e3e"; // แดง
             if (item.water_level === "ต่ำ") color = "#ecc94b"; // เหลือง
             if (item.water_level === "ปกติ/น้ำลดแล้ว") color = "#38a169"; // เขียว
 
             const marker = L.circleMarker([parseFloat(item.latitude), parseFloat(item.longitude)], {
-              color: color, fillColor: color, fillOpacity: 0.85, radius: 9
+              color: color, fillColor: color, fillOpacity: 0.9, radius: 9
             });
 
             marker.bindPopup(`
@@ -252,7 +260,7 @@
           }
         });
 
-        // อัปเดตเวลาที่ปรับปรุงล่าสุด
+        // อัปเดตเวลาล่าสุด
         const now = new Date();
         document.getElementById("lastUpdatedText").innerText = `ปรับปรุงล่าสุดเมื่อ: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')} น.`;
 
