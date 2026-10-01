@@ -50,7 +50,8 @@
     .modal-buttons { display: flex; gap: 8px; margin-top: 16px; }
     .btn-submit { background: #38a169; color: white; border: none; padding: 10px; border-radius: 4px; flex: 1; cursor: pointer; font-weight: bold; }
     .btn-cancel { background: #718096; color: white; border: none; padding: 10px; border-radius: 4px; flex: 1; cursor: pointer; }
-    .btn-delete-pin { background: #e53e3e; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-top: 6px; font-size: 11px; }
+    .btn-delete-pin { background: #e53e3e; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; font-size: 12px; font-weight: bold; width: 100%; }
+    .btn-delete-pin:hover { background: #c53030; }
   </style>
 </head>
 <body>
@@ -98,7 +99,7 @@
   </div>
 
   <script>
-    const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwpGvzpeLK_YpQl3-mg6NDa3aMgTdnJJ51mQhZXb1uBGD07T-1c1lUJ9X3rwG2vSZR8/exec";
+    const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycby-xqamELj9ZjWXDbI-WUtIlLC1QSNbyi9q6dTEUONXv46J60KaT3j4Syfb1xYEYgKj/exec";
 
     let isReportMode = false;
     let tempMarker = null;
@@ -133,7 +134,7 @@
         
         markersLayerGroup.clearLayers(); // ล้างหมุดเก่าก่อนวาดใหม่
 
-        data.forEach((item, index) => {
+        data.forEach((item) => {
           if (item.latitude && item.longitude) {
             let color = "orange";
             if (item.water_level === "สูง" || item.water_level === "วิกฤต") color = "red";
@@ -150,7 +151,7 @@
                 <b>ระดับน้ำ:</b> ${item.water_level || '-'}<br>
                 <b>รายละเอียด:</b> ${item.description || '-'}<br>
                 <small style="color:#666;">เวลา: ${item.timestamp ? new Date(item.timestamp).toLocaleString('th-TH') : '-'}</small><br>
-                <button class="btn-delete-pin" onclick="deletePin(${index + 2})">🗑️ ลบจุดนี้ (แถวที่ ${index + 2})</button>
+                <button class="btn-delete-pin" onclick="deletePinReal(${item.rowIndex})">🗑️ ลบจุดนี้ออกจากแผนที่</button>
               </div>
             `);
 
@@ -189,7 +190,6 @@
       if (tempMarker) map.removeLayer(tempMarker);
       tempMarker = L.marker([currentLatLng.lat, currentLatLng.lng]).addTo(map);
 
-      // เปิด Modal เลือกตัวเลือก
       document.getElementById("reportModal").style.display = "flex";
     });
 
@@ -198,7 +198,7 @@
       if (tempMarker) map.removeLayer(tempMarker);
     }
 
-    // ส่งข้อมูลแบบบันทึกตัวเลือก
+    // ส่งข้อมูลบันทึกใหม่
     async function submitReport() {
       const waterLevel = document.getElementById("waterLevelSelect").value;
       const locationName = document.getElementById("locationNameInput").value || "จุดปักหมุดบนแผนที่";
@@ -229,9 +229,28 @@
       }
     }
 
-    // ฟังก์ชันช่วยแสดงหมายเลขแถวใน Sheet เผื่อเข้าไปลบใน Google Sheet
-    function deletePin(rowIndex) {
-      alert(`หากต้องการลบจุดนี้ ให้เปิด Google Sheet แล้วลบข้อมูลแถวที่ ${rowIndex} ออกได้เลยครับ`);
+    // ฟังก์ชันสั่งลบแถวออกจาก Google Sheet จริงๆ
+    async function deletePinReal(rowIndex) {
+      if (!confirm("คุณต้องการลบจุดนี้ออกจากแผนที่และ Google Sheet ใช่หรือไม่?")) return;
+
+      const payload = {
+        action: "delete",
+        rowIndex: rowIndex
+      };
+
+      try {
+        await fetch(GOOGLE_SHEET_API, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        alert("ลบจุดแจ้งเหตุเรียบร้อยแล้ว!");
+        setTimeout(loadData, 1500); // รีโหลดข้อมูลหมุดใหม่
+      } catch (err) {
+        alert("เกิดข้อผิดพลาดในการลบข้อมูล");
+      }
     }
 
     loadData();
