@@ -8,7 +8,7 @@
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -173,39 +173,23 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 3. ดึงเส้นขอบเขตจังหวัดชัยภูมิ และทำ Mask ให้พื้นที่ภายนอกมีความสว่างน้อยกว่า
+    // 3. ดึงเส้นขอบเขตจังหวัดชัยภูมิ และทำพื้นที่จังหวัดอื่นๆ ให้มืดลง (ใช้ turf.js เพื่อความแม่นยำ)
     fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
       .then(response => response.json())
       .then(geoData => {
-        // สร้างกรอบสี่เหลี่ยมคลุมทั่วโลกเพื่อนำมาสลัก hole เฉพาะชัยภูมิ
-        const outerWorld = [
-          [[-90, -180], [90, -180], [90, 180], [-90, 180], [-90, -180]]
-        ];
+        const chaiyaphumFeature = geoData.features[0];
 
-        // สกัดพิกัดขอบเขตชัยภูมิ (รองรับทั้ง Polygon และ MultiPolygon ที่มีหลายส่วนแยก)
-        let chaiyaphumCoords = [];
-        const geomType = geoData.features[0].geometry.type;
+        // กรอบสี่เหลี่ยมคลุมทั่วโลก ใช้เป็นขอบเขตสำหรับ turf.mask
+        const worldBbox = turf.polygon([[
+          [-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]
+        ]]);
 
-        if (geomType === "Polygon") {
-          // Polygon: coordinates = [ring นอก, ring รู(ถ้ามี), ...]
-          chaiyaphumCoords = geoData.features[0].geometry.coordinates;
-        } else if (geomType === "MultiPolygon") {
-          // MultiPolygon: coordinates = [ [ring ของส่วนที่1], [ring ของส่วนที่2], ... ]
-          // ต้อง "แบน" (flatten) ทุกส่วนออกมารวมกัน ไม่เช่นนั้นจะเจาะรูได้แค่ส่วนแรกส่วนเดียว
-          // ทำให้พื้นที่ส่วนอื่นของจังหวัด (ถ้าแยกเป็นหลายก้อน) ไม่ถูกเจาะรู และถูกคลุมมืดผิดพลาด
-          chaiyaphumCoords = geoData.features[0].geometry.coordinates.flat();
-        }
+        // turf.mask จะคำนวณพื้นที่ "ทั่วโลก ลบด้วยจังหวัดชัยภูมิ" ให้อัตโนมัติ
+        // โดยไม่สนใจทิศทางการวนของพิกัด (ring winding) ในไฟล์ต้นฉบับ
+        const maskedArea = turf.mask(chaiyaphumFeature, worldBbox);
 
-        const maskGeoJSON = {
-          "type": "Feature",
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": outerWorld.concat(chaiyaphumCoords)
-          }
-        };
-
-        // วาด Mask สีเทาดำคลุมจังหวัดอื่นๆ ให้ความสว่างน้อยกว่าชัยภูมิอย่างชัดเจน
-        L.geoJSON(maskGeoJSON, {
+        // วาดพื้นที่มืดคลุมจังหวัดอื่นๆ ทั้งหมด (ยกเว้นรูตรงชัยภูมิ)
+        L.geoJSON(maskedArea, {
           style: {
             fillColor: '#1a202c',
             fillOpacity: 0.7,
@@ -214,14 +198,12 @@
           }
         }).addTo(map);
 
-        // วาดเส้นขอบเขตจังหวัดชัยภูมิแบบ 2 ชั้น เพื่อให้ดูเด่นชัดเจนขึ้น
-        // ชั้นที่ 1: เส้น glow หนา โปร่งแสง อยู่ด้านนอก (ให้ความรู้สึกเรืองแสง)
-        L.geoJSON(geoData, {
+        // วาดเส้นขอบเขตจังหวัดชัยภูมิให้ชัดเจน (เส้น glow ด้านนอก + เส้นคมด้านใน)
+        L.geoJSON(chaiyaphumFeature, {
           style: { color: '#fbd38d', weight: 14, opacity: 0.35, fillOpacity: 0 }
         }).addTo(map);
 
-        // ชั้นที่ 2: เส้นคมชัดสีสดอยู่ด้านใน (เส้นขอบจริงที่มองเห็นชัดเจน)
-        const boundaryLayer = L.geoJSON(geoData, {
+        const boundaryLayer = L.geoJSON(chaiyaphumFeature, {
           style: { color: '#e53e3e', weight: 4, opacity: 1, fillOpacity: 0 }
         }).addTo(map);
 
