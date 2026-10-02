@@ -12,7 +12,7 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    #map { width: 100vw; height: calc(100vh - 110px); background: #1a202c; }
+    #map { width: 100vw; height: calc(100vh - 110px); }
     #map.pin-mode { cursor: crosshair !important; }
 
     /* แถบอธิบายความหมายของแต่ละสีด้านบน */
@@ -165,7 +165,7 @@
     let currentLatLng = null;
     let markersLayerGroup = L.layerGroup();
 
-    // พิกัดละเอียดขอบเขตจังหวัดชัยภูมิ (Lng, Lat)
+    // พิกัดขอบเขตจังหวัดชัยภูมิ
     const chaiyaphumGeoJSON = {
       "type": "FeatureCollection",
       "features": [
@@ -197,37 +197,37 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 3. ทำ Mask ให้พื้นที่ภายนอกเป็นสีสลัว
+    // 3. ทำ Mask ปิดบังพื้นที่ภายนอก (เจาะรูเฉพาะจังหวัดชัยภูมิให้สว่าง)
     const outerWorld = [
-      [[-90, -180], [90, -180], [90, 180], [-90, 180], [-90, -180]]
+      [-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]
     ];
-    const chaiyaphumCoords = chaiyaphumGeoJSON.features[0].geometry.coordinates;
+    const chaiyaphumRing = chaiyaphumGeoJSON.features[0].geometry.coordinates[0];
 
     const maskGeoJSON = {
       "type": "Feature",
       "geometry": {
         "type": "Polygon",
-        "coordinates": outerWorld.concat(chaiyaphumCoords)
+        "coordinates": [outerWorld, chaiyaphumRing]
       }
     };
 
     L.geoJSON(maskGeoJSON, {
       style: {
         fillColor: '#1a202c',
-        fillOpacity: 0.75,
+        fillOpacity: 0.55,
         color: 'transparent',
         weight: 0
       }
     }).addTo(map);
 
-    // 3.1 วาดเส้นขอบฐานสีดำเพื่อสร้างความหนาและมิติ
+    // 3.1 วาดเส้นขอบฐานด้านหลัง (สีดำบางเพื่อเพิ่มความคมชัด)
     L.geoJSON(chaiyaphumGeoJSON, {
-      style: { color: '#000000', weight: 22, opacity: 0.8, fillOpacity: 0 }
+      style: { color: '#000000', weight: 8, opacity: 0.6, fillOpacity: 0 }
     }).addTo(map);
 
-    // 3.2 วาดเส้นขอบเขตจังหวัดชัยภูมิหลัก (สีแดงหนาเด่นชัดเท่าเส้นขอบเขตประเทศ)
+    // 3.2 วาดเส้นขอบเขตจังหวัดชัยภูมิ (สีแดง ขนาดพอดีเท่าขอบเขตประเทศ: weight: 6)
     const boundaryLayer = L.geoJSON(chaiyaphumGeoJSON, {
-      style: { color: '#e53e3e', weight: 16, opacity: 1.0, fillOpacity: 0 }
+      style: { color: '#e53e3e', weight: 6, opacity: 0.95, fillOpacity: 0 }
     }).addTo(map);
 
     map.fitBounds(boundaryLayer.getBounds());
