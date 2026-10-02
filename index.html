@@ -173,7 +173,7 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 3. ดึงเส้นขอบเขตจังหวัดชัยภูมิ และทำ Mask ให้พื้นที่ภายนอกเป็นสีเทา
+    // 3. ดึงเส้นขอบเขตจังหวัดชัยภูมิ และทำ Mask ให้พื้นที่ภายนอกมีความสว่างน้อยกว่า
     fetch('https://raw.githubusercontent.com/apisit/thailand-geojson/master/chaiyaphum.json')
       .then(response => response.json())
       .then(geoData => {
@@ -182,12 +182,18 @@
           [[-90, -180], [90, -180], [90, 180], [-90, 180], [-90, -180]]
         ];
 
-        // สกัดค координаты ชัยภูมิ
+        // สกัดพิกัดขอบเขตชัยภูมิ (รองรับทั้ง Polygon และ MultiPolygon ที่มีหลายส่วนแยก)
         let chaiyaphumCoords = [];
-        if (geoData.features[0].geometry.type === "Polygon") {
+        const geomType = geoData.features[0].geometry.type;
+
+        if (geomType === "Polygon") {
+          // Polygon: coordinates = [ring นอก, ring รู(ถ้ามี), ...]
           chaiyaphumCoords = geoData.features[0].geometry.coordinates;
-        } else if (geoData.features[0].geometry.type === "MultiPolygon") {
-          chaiyaphumCoords = geoData.features[0].geometry.coordinates[0];
+        } else if (geomType === "MultiPolygon") {
+          // MultiPolygon: coordinates = [ [ring ของส่วนที่1], [ring ของส่วนที่2], ... ]
+          // ต้อง "แบน" (flatten) ทุกส่วนออกมารวมกัน ไม่เช่นนั้นจะเจาะรูได้แค่ส่วนแรกส่วนเดียว
+          // ทำให้พื้นที่ส่วนอื่นของจังหวัด (ถ้าแยกเป็นหลายก้อน) ไม่ถูกเจาะรู และถูกคลุมมืดผิดพลาด
+          chaiyaphumCoords = geoData.features[0].geometry.coordinates.flat();
         }
 
         const maskGeoJSON = {
@@ -198,24 +204,25 @@
           }
         };
 
-        // วาด Mask สีเทาดำคลุมจังหวัดอื่นๆ
+        // วาด Mask สีเทาดำคลุมจังหวัดอื่นๆ ให้ความสว่างน้อยกว่าชัยภูมิอย่างชัดเจน
         L.geoJSON(maskGeoJSON, {
           style: {
             fillColor: '#1a202c',
-            fillOpacity: 0.65,
+            fillOpacity: 0.7,
             color: 'transparent',
             weight: 0
           }
         }).addTo(map);
 
-        // 3.1 วาดเส้นขอบฐานด้านหลัง (สีดำเงา) เพิ่มมิติให้เหมือนขอบเขตประเทศ
+        // วาดเส้นขอบเขตจังหวัดชัยภูมิแบบ 2 ชั้น เพื่อให้ดูเด่นชัดเจนขึ้น
+        // ชั้นที่ 1: เส้น glow หนา โปร่งแสง อยู่ด้านนอก (ให้ความรู้สึกเรืองแสง)
         L.geoJSON(geoData, {
-          style: { color: '#000000', weight: 24, opacity: 0.8, fillOpacity: 0 }
+          style: { color: '#fbd38d', weight: 14, opacity: 0.35, fillOpacity: 0 }
         }).addTo(map);
 
-        // 3.2 วาดเส้นขอบเขตจังหวัดชัยภูมิหลัก (สีแดงหนาเด่นชัด)
+        // ชั้นที่ 2: เส้นคมชัดสีสดอยู่ด้านใน (เส้นขอบจริงที่มองเห็นชัดเจน)
         const boundaryLayer = L.geoJSON(geoData, {
-          style: { color: '#e53e3e', weight: 18, opacity: 1.0, fillOpacity: 0 }
+          style: { color: '#e53e3e', weight: 4, opacity: 1, fillOpacity: 0 }
         }).addTo(map);
 
         map.fitBounds(boundaryLayer.getBounds());
