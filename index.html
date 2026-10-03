@@ -2,140 +2,149 @@
 <html lang="th">
 	<head>
 		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Dashboard ระดับน้ำสถานีบางปะกง (ความถี่ 10 นาที)</title>
+		<title>กราฟระดับน้ำสถานีบางปะกง - คลังข้อมูลน้ำ (Realtime)</title>
+		<!-- Highcharts & Tailwind CSS -->
+		<script src="https://code.highcharts.com/highcharts.js"></script>
+		<script src="https://code.highcharts.com/modules/accessibility.js"></script>
 		<script src="https://cdn.tailwindcss.com"></script>
-		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+		<style>
+			body { font-family: 'Prompt', sans-serif; background-color: #0b1329; color: #e2e8f0; }
+			.dark-card { background-color: #111c38; border: 1px solid #1e293b; }
+		</style>
 	</head>
-	<body class="bg-[#0f172a] text-slate-100 font-sans min-h-screen p-4 md:p-8">
+	<body class="p-6">
 		<div class="max-w-7xl mx-auto space-y-6">
 			
-			<!-- Top Cards Grid -->
-			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
-					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">ระดับน้ำปัจจุบัน</span>
-					<div class="mt-3 flex items-baseline">
-						<span id="water-level" class="text-4xl font-black text-sky-400">--</span>
-						<span class="ml-1.5 text-lg font-medium text-slate-300">ม.</span>
-					</div>
-					<div id="update-time" class="mt-2 text-xs text-slate-400">กำลังโหลด...</div>
-				</div>
-
-				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
-					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">ระดับขอบตลิ่ง</span>
-					<div class="mt-3 flex items-baseline">
-						<span id="bank-level" class="text-4xl font-black text-amber-400">--</span>
-						<span class="ml-1.5 text-lg font-medium text-slate-300">ม.</span>
-					</div>
-					<div class="mt-2 text-xs text-slate-400">เกณฑ์ล้นตลิ่ง (ม.รทก.)</div>
-				</div>
-
-				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
-					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">ระยะคงเหลือถึงตลิ่ง</span>
-					<div class="mt-3 flex items-baseline">
-						<span id="remaining-level" class="text-4xl font-black text-emerald-400">--</span>
-						<span class="ml-1.5 text-lg font-medium text-slate-300">ม.</span>
-					</div>
-					<div id="remaining-desc" class="mt-2 text-xs text-emerald-400">กำลังโหลด...</div>
-				</div>
-
-				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
-					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">สถานะเตือนภัย</span>
-					<div class="mt-3">
-						<span id="status-badge" class="inline-flex items-center px-3 py-1 rounded-lg text-lg font-bold bg-slate-500/20 text-slate-300 border border-slate-500/30">
-							กำลังโหลด...
-						</span>
-					</div>
-					<div class="mt-2 text-xs text-slate-400">เกณฑ์เตือน: น้อยกว่า 0.30 ม.</div>
-				</div>
-			</div>
-
-			<!-- Chart Section -->
-			<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-6 shadow-lg">
-				<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+			<!-- Header & Filters -->
+			<div class="dark-card p-4 rounded-xl shadow-lg flex flex-wrap items-center justify-between gap-4">
+				<h1 class="text-xl font-semibold text-cyan-400 flex items-center gap-2">
+					📊 กราฟระดับน้ำ (สถานีบางปะกง จ.ฉะเชิงเทรา) - ข้อมูลจริงจากระบบ API
+				</h1>
+				<div class="flex flex-wrap items-center gap-3 text-sm">
 					<div>
-						<h2 class="text-lg font-bold flex items-center gap-2">
-							<span>📈</span> สถานีบางปะกง - กราฟความถี่ทุก 10 นาที
-						</h2>
-						<p class="text-xs text-slate-400 mt-0.5">แสดงข้อมูลระดับน้ำอัปเดตต่อเนื่องแบบเรียลไทม์</p>
+						<label class="block text-xs text-slate-400 mb-1">จังหวัด</label>
+						<select class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+							<option>ฉะเชิงเทรา</option>
+						</select>
 					</div>
-					<div class="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full text-xs text-emerald-400 font-medium flex items-center gap-1.5">
-						<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> โหมด: 10-Min Interval
+					<div>
+						<label class="block text-xs text-slate-400 mb-1">สถานี</label>
+						<select class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+							<option>BPK001 บางปะกง</option>
+						</select>
 					</div>
-				</div>
-				
-				<div class="relative h-[350px] w-full">
-					<canvas id="waterChart"></canvas>
+					<div class="self-end">
+						<button onclick="loadWaterData()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-1.5 rounded font-medium transition">รีเฟรชข้อมูล</button>
+					</div>
 				</div>
 			</div>
+
+			<!-- Main Chart Card -->
+			<div class="dark-card p-6 rounded-xl shadow-lg">
+				<div id="update-status" class="text-xs text-slate-400 mb-2 text-right">กำลังโหลดข้อมูลจริง...</div>
+				<div id="waterChart" style="width:100%; height:480px;"></div>
+			</div>
+
 		</div>
 
 		<script>
-			const ctx = document.getElementById('waterChart').getContext('2d');
-			const waterChart = new Chart(ctx, {
-				type: 'line',
-				data: {
-					labels: [],
-					datasets: [{
-						label: 'ระดับน้ำจริง (ม.รทก.)',
-						data: [],
-						borderColor: '#06b6d4',
-						backgroundColor: 'rgba(6, 182, 212, 0.1)',
-						borderWidth: 3,
-						pointBackgroundColor: '#06b6d4',
-						pointRadius: 3,
-						tension: 0.3,
-						fill: true
+			let chart;
+
+			function initChart(chartData = [], bankLevel = 1.665) {
+				chart = Highcharts.chart('waterChart', {
+					chart: {
+						backgroundColor: '#111c38',
+						style: { fontFamily: 'Prompt' },
+						zoomType: 'x'
+					},
+					title: { text: null },
+					xAxis: {
+						type: 'datetime',
+						gridLineColor: '#1e293b',
+						gridLineWidth: 1,
+						labels: { style: { color: '#94a3b8' } }
+					},
+					yAxis: [{
+						title: { text: 'ระดับน้ำ (ม.รทก.)', style: { color: '#94a3b8' } },
+						gridLineColor: '#1e293b',
+						labels: { style: { color: '#94a3b8' } },
+						plotLines: [
+							{
+								value: bankLevel,
+								color: '#ef4444',
+								dashStyle: 'Dash',
+								width: 2,
+								label: { text: 'ระดับตลิ่ง ' + bankLevel + ' ม.รทก.', style: { color: '#ef4444', fontWeight: 'bold' }, align: 'right' }
+							},
+							{
+								value: -11.65,
+								color: '#94a3b8',
+								dashStyle: 'Dash',
+								width: 2,
+								label: { text: 'ระดับท้องน้ำ -11.65 ม.รทก.', style: { color: '#94a3b8' }, align: 'right' }
+							}
+						]
+					}],
+					tooltip: {
+						backgroundColor: '#0b1329',
+						style: { color: '#e2e8f0' },
+						borderColor: '#1e293b'
+					},
+					legend: { enabled: false },
+					series: [{
+						name: 'ระดับน้ำจริง',
+						type: 'area',
+						color: '#38bdf8',
+						fillColor: {
+							linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+							stops: [
+								[0, 'rgba(56, 189, 248, 0.4)'],
+								[1, 'rgba(56, 189, 248, 0.0)']
+							]
+						},
+						data: chartData
 					}]
-				},
-				options: {
-					responsive: true,
-					maintainAspectRatio: false,
-					scales: {
-						x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
-						y: { grid: { color: '#334155' }, ticks: { color: '#64748b' } }
-					}
-				}
-			});
+				});
+			}
 
-			async function fetchRealtimeData() {
+			async function loadWaterData() {
 				try {
-					const res = await fetch('https://script.google.com/macros/s/AKfycbyTyQBLhSd5I9w6q9s4NOj-cMFhgHeVv5U0W-6oqNvUlcSz092jdJrSw9a6iQ_dBD9F/exec');
-					const data = await res.json();
-					
-					document.getElementById('water-level').innerText = data.water_level;
-					document.getElementById('bank-level').innerText = data.bank_level;
-					document.getElementById('remaining-level').innerText = data.remaining;
-					document.getElementById('update-time').innerText = "อัปเดตล่าสุด: " + data.updated_at;
+					// แทนที่ด้วย Web App URL ของ Google Apps Script ที่คุณ Deploy ไว้
+					const scriptUrl = 'https://script.google.com/macros/s/AKfycbzyngOcjjki63hXgh838-Djsg6cTxi8VCUaL4FUqSEYtCKMqooaK-IoptexRA5T-TZD/exec';
+					const response = await fetch(scriptUrl);
+					const result = await response.json();
 
-					const badge = document.getElementById('status-badge');
-					const remDesc = document.getElementById('remaining-desc');
+					document.getElementById('update-status').innerText = "อัปเดตล่าสุดจากระบบ: " + result.updated_at;
 
-					// เช็คเงื่อนไขเตือนภัย < 0.30 ม.
-					if (parseFloat(data.remaining) < 0.30) {
-						badge.className = "inline-flex items-center px-3 py-1 rounded-lg text-lg font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30";
-						badge.innerText = "🚨 วิกฤต (<0.3ม.)";
-						remDesc.className = "mt-2 text-xs text-rose-400";
-						remDesc.innerText = "🚨 ใกล้ล้นตลิ่งมาก ต้องเฝ้าระวังด่วน";
+					// แปลงข้อมูลประวัติให้อยู่ในรูปแบบ Timestamp ของ Highcharts [Date.UTC(...), value]
+					let formattedData = [];
+					if (result.history && result.history.length > 0) {
+						formattedData = result.history.map(item => {
+							let d = new Date(item.time);
+							return [d.getTime(), item.level];
+						});
 					} else {
-						badge.className = "inline-flex items-center px-3 py-1 rounded-lg text-lg font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-						badge.innerText = "✅ ปกติ";
-						remDesc.className = "mt-2 text-xs text-emerald-400";
-						remDesc.innerText = "✅ อยู่ในเกณฑ์ปลอดภัย (>0.30ม.)";
+						// กรณีไม่มีข้อมูลประวัติย้อนหลัง ให้ใส่จุดปัจจุบันจำลองไว้ป้องกันกราฟว่าง
+						let now = new Date().getTime();
+						formattedData = [[now, result.water_level]];
 					}
 
-					if (data.chart_labels && data.chart_data) {
-						waterChart.data.labels = data.chart_labels;
-						waterChart.data.datasets[0].data = data.chart_data;
-						waterChart.update();
+					if (!chart) {
+						initChart(formattedData, result.bank_level);
+					} else {
+						chart.series[0].setData(formattedData);
 					}
-				} catch (e) {
-					console.error("Fetch error:", e);
+				} catch (error) {
+					console.error("Failed to load data:", error);
+					document.getElementById('update-status').innerText = "⚠️ ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบ URL";
 				}
 			}
 
-			fetchRealtimeData();
-			setInterval(fetchRealtimeData, 600000); // รีเฟรชหน้าเว็บทุก 10 นาที (600,000 มิลลิวินาที)
+			// โหลดข้อมูลทันทีเมื่อเปิดหน้าเว็บ
+			loadWaterData();
+			// รีเฟรชข้อมูลบนเว็บทุกๆ 10 นาที
+			setInterval(loadWaterData, 600000);
 		</script>
 	</body>
 </html>
