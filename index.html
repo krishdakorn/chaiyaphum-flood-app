@@ -1,368 +1,141 @@
 <!DOCTYPE html>
 <html lang="th">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>รายงานน้ำท่วม จังหวัดชัยภูมิ</title>
-  
-  <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Dashboard ระดับน้ำสถานีบางปะกง (ความถี่ 10 นาที)</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	</head>
+	<body class="bg-[#0f172a] text-slate-100 font-sans min-h-screen p-4 md:p-8">
+		<div class="max-w-7xl mx-auto space-y-6">
+			
+			<!-- Top Cards Grid -->
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
+					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">ระดับน้ำปัจจุบัน</span>
+					<div class="mt-3 flex items-baseline">
+						<span id="water-level" class="text-4xl font-black text-sky-400">--</span>
+						<span class="ml-1.5 text-lg font-medium text-slate-300">ม.</span>
+					</div>
+					<div id="update-time" class="mt-2 text-xs text-slate-400">กำลังโหลด...</div>
+				</div>
 
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    #map { width: 100vw; height: calc(100vh - 110px); }
-    #map.pin-mode { cursor: crosshair !important; }
+				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
+					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">ระดับขอบตลิ่ง</span>
+					<div class="mt-3 flex items-baseline">
+						<span id="bank-level" class="text-4xl font-black text-amber-400">--</span>
+						<span class="ml-1.5 text-lg font-medium text-slate-300">ม.</span>
+					</div>
+					<div class="mt-2 text-xs text-slate-400">เกณฑ์ล้นตลิ่ง (ม.รทก.)</div>
+				</div>
 
-    /* แถบอธิบายความหมายของแต่ละสีด้านบน */
-    .legend-bar {
-      display: flex;
-      height: 40px;
-      width: 100%;
-      background-color: #f7fafc;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .legend-item {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      font-size: 13px;
-      text-shadow: 0px 1px 2px rgba(0,0,0,0.5);
-    }
-    .bg-green { background-color: #38a169; }
-    .bg-yellow { background-color: #ecc94b; color: #333; text-shadow: none; }
-    .bg-orange { background-color: #dd6b20; }
-    .bg-red { background-color: #e53e3e; }
-    .bg-purple { background-color: #805ad5; }
+				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
+					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">ระยะคงเหลือถึงตลิ่ง</span>
+					<div class="mt-3 flex items-baseline">
+						<span id="remaining-level" class="text-4xl font-black text-emerald-400">--</span>
+						<span class="ml-1.5 text-lg font-medium text-slate-300">ม.</span>
+					</div>
+					<div id="remaining-desc" class="mt-2 text-xs text-emerald-400">กำลังโหลด...</div>
+				</div>
 
-    /* แถบแสดงสถานะเวลาการอัปเดตล่าสุด */
-    .status-bar {
-      background: #edf2f7;
-      padding: 8px 16px;
-      font-size: 13px;
-      color: #2d3748;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #cbd5e0;
-    }
-    .status-info { display: flex; align-items: center; gap: 8px; }
-    .status-dot { width: 8px; height: 8px; background: #38a169; border-radius: 50%; display: inline-block; }
+				<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-5 shadow-lg">
+					<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">สถานะเตือนภัย</span>
+					<div class="mt-3">
+						<span id="status-badge" class="inline-flex items-center px-3 py-1 rounded-lg text-lg font-bold bg-slate-500/20 text-slate-300 border border-slate-500/30">
+							กำลังโหลด...
+						</span>
+					</div>
+					<div class="mt-2 text-xs text-slate-400">เกณฑ์เตือน: น้อยกว่า 0.30 ม.</div>
+				</div>
+			</div>
 
-    /* กล่องควบคุมและปุ่มแจ้งเหตุ */
-    .header-box {
-      position: absolute; top: 105px; left: 10px; z-index: 1000;
-      background: rgba(255, 255, 255, 0.95); padding: 12px 16px;
-      border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-      max-width: 280px;
-    }
-    .btn-report {
-      margin-top: 8px; background: #e53e3e; color: white; border: none;
-      padding: 8px 12px; border-radius: 6px; cursor: pointer; width: 100%;
-      font-weight: bold; font-size: 13px; transition: all 0.2s;
-    }
-    .btn-report.active { background: #dd6b20; }
-    .instruction-note {
-      font-size: 11px; color: #c05621; margin-top: 6px; font-weight: bold; display: none;
-      background: #feebc8; padding: 6px; border-radius: 4px; text-align: center;
-    }
+			<!-- Chart Section -->
+			<div class="bg-[#1e293b] border border-slate-800 rounded-2xl p-6 shadow-lg">
+				<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+					<div>
+						<h2 class="text-lg font-bold flex items-center gap-2">
+							<span>📈</span> สถานีบางปะกง - กราฟความถี่ทุก 10 นาที
+						</h2>
+						<p class="text-xs text-slate-400 mt-0.5">แสดงข้อมูลระดับน้ำอัปเดตต่อเนื่องแบบเรียลไทม์</p>
+					</div>
+					<div class="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full text-xs text-emerald-400 font-medium flex items-center gap-1.5">
+						<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> โหมด: 10-Min Interval
+					</div>
+				</div>
+				
+				<div class="relative h-[350px] w-full">
+					<canvas id="waterChart"></canvas>
+				</div>
+			</div>
+		</div>
 
-    /* Modal Form สำหรับกรอกข้อมูล */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.5); z-index: 2000; display: none;
-      justify-content: center; align-items: center;
-    }
-    .modal-content {
-      background: white; padding: 20px; border-radius: 10px;
-      width: 90%; max-width: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    .modal-content h4 { margin-top: 0; margin-bottom: 12px; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
-    .form-group select, .form-group input, .form-group textarea {
-      width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;
-    }
-    .modal-buttons { display: flex; gap: 8px; margin-top: 16px; }
-    .btn-submit { background: #38a169; color: white; border: none; padding: 10px; border-radius: 4px; flex: 1; cursor: pointer; font-weight: bold; }
-    .btn-cancel { background: #718096; color: white; border: none; padding: 10px; border-radius: 4px; flex: 1; cursor: pointer; }
-    .btn-delete-pin { background: #e53e3e; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; font-size: 12px; font-weight: bold; width: 100%; }
-    .btn-delete-pin:hover { background: #c53030; }
-  </style>
-</head>
-<body>
+		<script>
+			const ctx = document.getElementById('waterChart').getContext('2d');
+			const waterChart = new Chart(ctx, {
+				type: 'line',
+				data: {
+					labels: [],
+					datasets: [{
+						label: 'ระดับน้ำจริง (ม.รทก.)',
+						data: [],
+						borderColor: '#06b6d4',
+						backgroundColor: 'rgba(6, 182, 212, 0.1)',
+						borderWidth: 3,
+						pointBackgroundColor: '#06b6d4',
+						pointRadius: 3,
+						tension: 0.3,
+						fill: true
+					}]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					scales: {
+						x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
+						y: { grid: { color: '#334155' }, ticks: { color: '#64748b' } }
+					}
+				}
+			});
 
-  <!-- 1. แถบแสดงความหมายของสีระดับน้ำด้านบน -->
-  <div class="legend-bar">
-    <div class="legend-item bg-green">🟢 ปกติ / น้ำลด</div>
-    <div class="legend-item bg-yellow">🟡 น้ำขังเล็กน้อย</div>
-    <div class="legend-item bg-orange">🟠 ปานกลาง / เฝ้าระวัง</div>
-    <div class="legend-item bg-red">🔴 สูง / รถเล็กผ่านไม่ได้</div>
-    <div class="legend-item bg-purple">🟣 วิกฤต / สัญจรไม่ได้</div>
-  </div>
+			async function fetchRealtimeData() {
+				try {
+					const res = await fetch('https://script.google.com/macros/s/AKfycbyTyQBLhSd5I9w6q9s4NOj-cMFhgHeVv5U0W-6oqNvUlcSz092jdJrSw9a6iQ_dBD9F/exec');
+					const data = await res.json();
+					
+					document.getElementById('water-level').innerText = data.water_level;
+					document.getElementById('bank-level').innerText = data.bank_level;
+					document.getElementById('remaining-level').innerText = data.remaining;
+					document.getElementById('update-time').innerText = "อัปเดตล่าสุด: " + data.updated_at;
 
-  <!-- 2. แถบแสดงเวลาที่อัปเดตข้อมูลล่าสุด -->
-  <div class="status-bar">
-    <div class="status-info">
-      <span class="status-dot"></span>
-      <span><b>พื้นที่:</b> จังหวัดชัยภูมิ</span>
-    </div>
-    <div id="lastUpdatedText">ข้อมูลล่าสุด: กำลังโหลด...</div>
-  </div>
+					const badge = document.getElementById('status-badge');
+					const remDesc = document.getElementById('remaining-desc');
 
-  <!-- กล่องควบคุมบนแผนที่ -->
-  <div class="header-box">
-    <h4 style="margin:0; color: #2d3748;">รายงานน้ำท่วม ชัยภูมิ</h4>
-    <button id="reportBtn" class="btn-report" onclick="toggleReportMode()">+ แจ้งจุดน้ำท่วม (ปักหมุด)</button>
-    <div id="instructionNote" class="instruction-note">👇 แตะ/คลิก ตรงจุดเกิดเหตุบนแผนที่</div>
-  </div>
+					// เช็คเงื่อนไขเตือนภัย < 0.30 ม.
+					if (parseFloat(data.remaining) < 0.30) {
+						badge.className = "inline-flex items-center px-3 py-1 rounded-lg text-lg font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30";
+						badge.innerText = "🚨 วิกฤต (<0.3ม.)";
+						remDesc.className = "mt-2 text-xs text-rose-400";
+						remDesc.innerText = "🚨 ใกล้ล้นตลิ่งมาก ต้องเฝ้าระวังด่วน";
+					} else {
+						badge.className = "inline-flex items-center px-3 py-1 rounded-lg text-lg font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+						badge.innerText = "✅ ปกติ";
+						remDesc.className = "mt-2 text-xs text-emerald-400";
+						remDesc.innerText = "✅ อยู่ในเกณฑ์ปลอดภัย (>0.30ม.)";
+					}
 
-  <!-- แผนที่ Leaflet -->
-  <div id="map"></div>
+					if (data.chart_labels && data.chart_data) {
+						waterChart.data.labels = data.chart_labels;
+						waterChart.data.datasets[0].data = data.chart_data;
+						waterChart.update();
+					}
+				} catch (e) {
+					console.error("Fetch error:", e);
+				}
+			}
 
-  <!-- Modal ฟอร์มระบุข้อมูลระดับน้ำ -->
-  <div id="reportModal" class="modal-overlay">
-    <div class="modal-content">
-      <h4>📍 แจ้งรายละเอียดจุดน้ำท่วม</h4>
-      
-      <div class="form-group">
-        <label>ระดับน้ำ (เลือกจากรายการ):</label>
-        <select id="waterLevelSelect">
-          <option value="ปกติ/น้ำลดแล้ว">🟢 ปกติ / น้ำลดลงแล้ว</option>
-          <option value="ต่ำ">🟡 น้ำขังเล็กน้อย / ต่ำ (10-20 ซม.)</option>
-          <option value="ปานกลาง" selected>🟠 ปานกลาง / เฝ้าระวัง (20-50 ซม.)</option>
-          <option value="สูง">🔴 สูง / รถเล็กผ่านไม่ได้ (50-100 ซม.)</option>
-          <option value="วิกฤต">🟣 วิกฤต / สัญจรไม่ได้ (> 100 ซม.)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>ชื่อสถานที่ / จุดสังเกต:</label>
-        <input type="text" id="locationNameInput" placeholder="เช่น หน้าวัดบ้านค่าย, อ.เมือง">
-      </div>
-
-      <div class="form-group">
-        <label>รายละเอียดเพิ่มเติม:</label>
-        <textarea id="descriptionInput" rows="2" placeholder="เช่น ท่วมถนนทางเข้าหมู่บ้าน"></textarea>
-      </div>
-
-      <div class="modal-buttons">
-        <button class="btn-submit" onclick="submitReport()">บันทึกข้อมูล</button>
-        <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycby-xqamELj9ZjWXDbI-WUtIlLC1QSNbyi9q6dTEUONXv46J60KaT3j4Syfb1xYEYgKj/exec";
-
-    let isReportMode = false;
-    let tempMarker = null;
-    let currentLatLng = null;
-    let markersLayerGroup = L.layerGroup();
-
-    // พิกัดขอบเขตจังหวัดชัยภูมิ
-    const chaiyaphumGeoJSON = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "properties": { "name": "Chaiyaphum" },
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [[
-              [101.8906, 16.5367], [102.0125, 16.5250], [102.1245, 16.5898], [102.2612, 16.5187],
-              [102.3256, 16.4102], [102.4385, 16.2954], [102.4589, 16.1843], [102.4012, 16.0825],
-              [102.3489, 15.9612], [102.3812, 15.8523], [102.3512, 15.7212], [102.2156, 15.6189],
-              [102.1489, 15.5312], [102.1156, 15.4215], [102.0456, 15.3489], [101.9123, 15.2895],
-              [101.7856, 15.2612], [101.6234, 15.3125], [101.5123, 15.3989], [101.4215, 15.4856],
-              [101.3589, 15.5895], [101.2456, 15.6812], [101.1289, 15.7895], [101.2156, 15.9125],
-              [101.3125, 16.0245], [101.3856, 16.1489], [101.4125, 16.2812], [101.5215, 16.3989],
-              [101.6812, 16.4856], [101.7856, 16.5215], [101.8906, 16.5367]
-            ]]
-          }
-        }
-      ]
-    };
-
-    const map = L.map('map').setView([15.8064, 102.0315], 9);
-    markersLayerGroup.addTo(map);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
-
-    // 3. ทำ Mask ปิดบังพื้นที่ภายนอก (เจาะรูเฉพาะจังหวัดชัยภูมิให้สว่าง)
-    const outerWorld = [
-      [-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]
-    ];
-    const chaiyaphumRing = chaiyaphumGeoJSON.features[0].geometry.coordinates[0];
-
-    const maskGeoJSON = {
-      "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [outerWorld, chaiyaphumRing]
-      }
-    };
-
-    L.geoJSON(maskGeoJSON, {
-      style: {
-        fillColor: '#1a202c',
-        fillOpacity: 0.55,
-        color: 'transparent',
-        weight: 0
-      }
-    }).addTo(map);
-
-    // 3.1 วาดเส้นขอบฐานด้านหลัง (สีดำบางเพื่อเพิ่มความคมชัด)
-    L.geoJSON(chaiyaphumGeoJSON, {
-      style: { color: '#000000', weight: 8, opacity: 0.6, fillOpacity: 0 }
-    }).addTo(map);
-
-    // 3.2 วาดเส้นขอบเขตจังหวัดชัยภูมิ (สีแดง ขนาดพอดีเท่าขอบเขตประเทศ: weight: 6)
-    const boundaryLayer = L.geoJSON(chaiyaphumGeoJSON, {
-      style: { color: '#e53e3e', weight: 6, opacity: 0.95, fillOpacity: 0 }
-    }).addTo(map);
-
-    map.fitBounds(boundaryLayer.getBounds());
-
-    // โหลดข้อมูลหมุดจาก Google Sheets
-    async function loadData() {
-      if (!GOOGLE_SHEET_API || GOOGLE_SHEET_API.includes("วาง_WEB_APP_URL")) return;
-
-      try {
-        const response = await fetch(GOOGLE_SHEET_API);
-        const data = await response.json();
-        
-        markersLayerGroup.clearLayers();
-
-        data.forEach((item) => {
-          if (item.latitude && item.longitude) {
-            let color = "#dd6b20"; // ส้ม (ปานกลาง)
-            if (item.water_level === "วิกฤต") color = "#805ad5"; // ม่วง
-            if (item.water_level === "สูง") color = "#e53e3e"; // แดง
-            if (item.water_level === "ต่ำ") color = "#ecc94b"; // เหลือง
-            if (item.water_level === "ปกติ/น้ำลดแล้ว") color = "#38a169"; // เขียว
-
-            const marker = L.circleMarker([parseFloat(item.latitude), parseFloat(item.longitude)], {
-              color: color, fillColor: color, fillOpacity: 0.85, radius: 9
-            });
-
-            marker.bindPopup(`
-              <div style="font-size:13px;">
-                <b>สถานที่:</b> ${item.location_name || 'จุดแจ้งเหตุ'}<br>
-                <b>ระดับน้ำ:</b> ${item.water_level || '-'}<br>
-                <b>รายละเอียด:</b> ${item.description || '-'}<br>
-                <small style="color:#666;">เวลา: ${item.timestamp ? new Date(item.timestamp).toLocaleString('th-TH') : '-'}</small><br>
-                <button class="btn-delete-pin" onclick="deletePinReal(${item.rowIndex})">🗑️ ลบจุดนี้ออกจากแผนที่</button>
-              </div>
-            `);
-
-            markersLayerGroup.addLayer(marker);
-          }
-        });
-
-        // อัปเดตเวลาที่ปรับปรุงล่าสุด
-        const now = new Date();
-        document.getElementById("lastUpdatedText").innerText = `ปรับปรุงล่าสุดเมื่อ: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')} น.`;
-
-      } catch (err) {
-        console.error("เกิดข้อผิดพลาดในการโหลดข้อมูล:", err);
-        document.getElementById("lastUpdatedText").innerText = "ไม่สามารถโหลดข้อมูลได้";
-      }
-    }
-
-    function toggleReportMode() {
-      isReportMode = !isReportMode;
-      const btn = document.getElementById("reportBtn");
-      const note = document.getElementById("instructionNote");
-      const mapDiv = document.getElementById("map");
-
-      if (isReportMode) {
-        btn.innerText = "❌ ยกเลิกการปักหมุด";
-        btn.classList.add("active");
-        note.style.display = "block";
-        mapDiv.classList.add("pin-mode");
-      } else {
-        btn.innerText = "+ แจ้งจุดน้ำท่วม (ปักหมุด)";
-        btn.classList.remove("active");
-        note.style.display = "none";
-        mapDiv.classList.remove("pin-mode");
-      }
-    }
-
-    map.on('click', function(e) {
-      if (!isReportMode) return;
-
-      currentLatLng = e.latlng;
-      if (tempMarker) map.removeLayer(tempMarker);
-      tempMarker = L.marker([currentLatLng.lat, currentLatLng.lng]).addTo(map);
-
-      document.getElementById("reportModal").style.display = "flex";
-    });
-
-    function closeModal() {
-      document.getElementById("reportModal").style.display = "none";
-      if (tempMarker) map.removeLayer(tempMarker);
-    }
-
-    async function submitReport() {
-      const waterLevel = document.getElementById("waterLevelSelect").value;
-      const locationName = document.getElementById("locationNameInput").value || "จุดปักหมุดบนแผนที่";
-      const description = document.getElementById("descriptionInput").value || "";
-
-      const payload = {
-        location_name: locationName,
-        latitude: currentLatLng.lat,
-        longitude: currentLatLng.lng,
-        water_level: waterLevel,
-        description: description
-      };
-
-      try {
-        await fetch(GOOGLE_SHEET_API, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        alert("บันทึกข้อมูลเรียบร้อยแล้ว!");
-        closeModal();
-        toggleReportMode();
-        setTimeout(loadData, 1500);
-      } catch (err) {
-        alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
-      }
-    }
-
-    async function deletePinReal(rowIndex) {
-      if (!confirm("คุณต้องการลบจุดนี้ออกจากแผนที่ใช่หรือไม่?")) return;
-
-      const payload = { action: "delete", rowIndex: rowIndex };
-
-      try {
-        await fetch(GOOGLE_SHEET_API, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        alert("ลบจุดแจ้งเหตุเรียบร้อยแล้ว!");
-        setTimeout(loadData, 1500);
-      } catch (err) {
-        alert("เกิดข้อผิดพลาดในการลบข้อมูล");
-      }
-    }
-
-    loadData();
-  </script>
-</body>
+			fetchRealtimeData();
+			setInterval(fetchRealtimeData, 600000); // รีเฟรชหน้าเว็บทุก 10 นาที (600,000 มิลลิวินาที)
+		</script>
+	</body>
 </html>
